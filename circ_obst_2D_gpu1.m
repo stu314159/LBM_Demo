@@ -10,9 +10,10 @@ dynamics = 3;
 % 3 = MRT
 
 
-Num_ts = 60000;
+Num_ts = 40000;
 ts_rep_freq = 100;
 plot_freq = 1000;
+GPU_accel = true;
 
 Lx_p = 4;
 Ly_p = 1;
@@ -37,8 +38,8 @@ Ld = 1; Td = 1; Ud = (To/Lo)*Uavg;
 nu_d = 1/Re;
 
 % convert to LBM units
-dt = 0.25e-2;
-Ny_divs = 21;
+dt = 1e-3;
+Ny_divs = 51;
 dx = 1/(Ny_divs-1);
 u_lbm = (dt/dx)*Ud;
 nu_lbm=(dt/(dx^2))*nu_d;
@@ -151,16 +152,33 @@ if ((run_dec ~= 'n') && (run_dec ~= 'N'))
     
     fprintf('Ok! Cross your fingers!! \n');
     
+    if GPU_accel
+       % transfer key variables to the GPU 
+        fIn = gpuArray(single(fIn));
+        fOut = gpuArray(single(fOut));
+        fEq = gpuArray(single(fEq));
+        ux = gpuArray(single(ux));
+        uy = gpuArray(single(uy));
+        rho = gpuArray(single(rho));
+        ex = gpuArray(single(ex));
+        ey = gpuArray(single(ey));
+        w = gpuArray(single(w));
+        omega_op = gpuArray(single(omega_op));
+        inl = gpuArray(int32(inl));
+        onl = gpuArray(int32(onl));
+        snl = gpuArray(int32(snl));
+        stm = gpuArray(int32(stm));
+        
+    end
+   
+   
     
-    
-    
-    
-    % cylinder net force:
-    
-    ts_axis = 0:plot_freq:Num_ts;
-    cyl_net_force_x = zeros(1,length(ts_axis));
-    cyl_net_force_y = zeros(1,length(ts_axis));
-    plot_cycle = 0;
+%     % cylinder net force:
+%     
+%     ts_axis = 0:plot_freq:Num_ts;
+%     cyl_net_force_x = zeros(1,length(ts_axis));
+%     cyl_net_force_y = zeros(1,length(ts_axis));
+%     plot_cycle = 0;
     
     % commence time stepping
     tic;
@@ -228,7 +246,7 @@ if ((run_dec ~= 'n') && (run_dec ~= 'N'))
             figure(1)
             subplot(2,1,1)
             
-            u_p = sqrt(ux.*ux+uy.*uy);
+            u_p = gather(sqrt(ux.*ux+uy.*uy));
             u_p = reshape(u_p,Nx,Ny)./u_conv_fact;
             imagesc(u_p');
             %colorbar
@@ -237,7 +255,7 @@ if ((run_dec ~= 'n') && (run_dec ~= 'N'))
             % density
             %figure(2)
             subplot(2,1,2)
-            rho_p = reshape(rho,Nx,Ny);
+            rho_p = reshape(gather(rho),Nx,Ny);
             imagesc(rho_p');
             title('Density')
             axis equal off
@@ -256,33 +274,35 @@ if ((run_dec ~= 'n') && (run_dec ~= 'N'))
     ex_time = toc;
     fprintf('Lattice Point updates per second = %g.\n',nnodes*Num_ts/ex_time);
     
-     % compute density
-    rho = sum(fIn,2);
     
-    % compute velocities
-    ux = (fIn*ex')./rho;
-    uy = (fIn*ey')./rho;
-    
-    % just test this for now..
-    F = getForce(snl,stm,LatticeSpeeds,bb_spd,fIn);
-    
-    PointForceX=zeros(Nx*Ny,1);
-    PointForceY=zeros(Nx*Ny,1);
-    PointForceX(snl)=F(:,1);
-    PointForceY(snl)=F(:,2);
-    
-    % get the X/Y force on the cylinder
-    fCyl_X = sum(PointForceX(circ_list));
-    fCyl_Y = sum(PointForceY(circ_list));
-    
-    fCyl_X_p = fCyl_X*(l_conv_fact^1)/(u_conv_fact^2);
-    fCyl_Y_p = fCyl_Y*(l_conv_fact^1)/(u_conv_fact^2);
-    
-    fprintf('Estimated Cd in physical coordinates = %g.\n',...
-        norm([fCyl_X_p fCyl_Y_p],2)/(rho_lbm*r_c*Uavg*Uavg));
-    
-    fprintf('Estimated Fx in physical units = %g.\n',fCyl_X_p);
-    fprintf('Estimated Fy in physical units = %g.\n',fCyl_Y_p);
+    % this portion of the code is not ready or correct
+%      % compute density
+%     rho = sum(fIn,2);
+%     
+%     % compute velocities
+%     ux = (fIn*ex')./rho;
+%     uy = (fIn*ey')./rho;
+%     
+%     % just test this for now..
+%     F = getForce(snl,stm,LatticeSpeeds,bb_spd,fIn);
+%     
+%     PointForceX=zeros(Nx*Ny,1);
+%     PointForceY=zeros(Nx*Ny,1);
+%     PointForceX(snl)=F(:,1);
+%     PointForceY(snl)=F(:,2);
+%     
+%     % get the X/Y force on the cylinder
+%     fCyl_X = sum(PointForceX(circ_list));
+%     fCyl_Y = sum(PointForceY(circ_list));
+%     
+%     fCyl_X_p = fCyl_X*(l_conv_fact^1)/(u_conv_fact^2);
+%     fCyl_Y_p = fCyl_Y*(l_conv_fact^1)/(u_conv_fact^2);
+%     
+%     fprintf('Estimated Cd in physical coordinates = %g.\n',...
+%         norm([fCyl_X_p fCyl_Y_p],2)/(rho_lbm*r_c*Uavg*Uavg));
+%     
+%     fprintf('Estimated Fx in physical units = %g.\n',fCyl_X_p);
+%     fprintf('Estimated Fy in physical units = %g.\n',fCyl_Y_p);
     
     
     
